@@ -1,0 +1,65 @@
+import ccxt
+import time
+
+# ---- CONFIG ----
+EXCHANGE_NAME = "binance"
+SYMBOL = "BTC/USDT"
+TRADE_AMOUNT = 0.001  # Adjust as needed
+CHECK_INTERVAL = 10  # Seconds between price checks
+API_KEY = "your_api_key"
+API_SECRET = "your_api_secret"
+
+# ---- CONNECT TO EXCHANGE ----
+exchange = ccxt.binance({
+    "apiKey": API_KEY,
+    "secret": API_SECRET,
+    "enableRateLimit": True,
+})
+
+# ---- VARIABLES ----
+last_high_price = None  # Track last peak
+last_buy_price = None   # Track last purchase
+position = 0  # Amount of BTC bought
+
+# ---- FUNCTION TO GET CURRENT PRICE ----
+def get_price():
+    ticker = exchange.fetch_ticker(SYMBOL)
+    return ticker["last"]
+
+# ---- FUNCTION TO PLACE ORDERS ----
+def place_order(side, amount, price):
+    order = exchange.create_limit_order(SYMBOL, side, amount, price)
+    print(f"{side.upper()} ORDER: {amount} BTC at {price}")
+    return order
+
+# ---- MAIN TRADING LOOP ----
+while True:
+    try:
+        price = get_price()
+        print(f"Current Price: {price}")
+
+        # Update last high price
+        if last_high_price is None or price > last_high_price:
+            last_high_price = price
+
+        # BUY LOGIC
+        if last_high_price and price <= last_high_price * 0.98 and position == 0:
+            last_buy_price = price
+            position += TRADE_AMOUNT
+            place_order("buy", TRADE_AMOUNT, price)
+        elif last_high_price and price <= last_high_price * 0.96 and position > 0:
+            position += TRADE_AMOUNT
+            place_order("buy", TRADE_AMOUNT, price)
+
+        # SELL LOGIC
+        if last_buy_price and price >= last_buy_price * 1.03 and position > 0:
+            position -= TRADE_AMOUNT
+            place_order("sell", TRADE_AMOUNT, price)
+        elif last_buy_price and price >= last_buy_price * 1.06 and position > 0:
+            position = 0
+            place_order("sell", position, price)
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+    time.sleep(CHECK_INTERVAL)
